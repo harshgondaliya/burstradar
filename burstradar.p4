@@ -6,7 +6,10 @@ const bit<16> TYPE_IPV4 = 0x800;
 const bit<32> TYPE_EGRESS_CLONE = 2;
 #define IS_E2E_CLONE(std_meta) (std_meta.instance_type == TYPE_EGRESS_CLONE)
 const bit<32> E2E_CLONE_SESSION_ID = 11;
-
+const bit<19> THRESHOLD = 18750;
+const bit<32> MAX_ENTRIES = 29;
+#define SIZE_OF_ENTRY 238
+#define TYPE_TELEMETRY 31
 /*************************************************************************
 *********************** H E A D E R S  ***********************************
 *************************************************************************/
@@ -36,13 +39,50 @@ header ipv4_t {
     ip4Addr_t dstAddr;
 }
 
+header ipv4_option_t {
+    bit<1> copyFlag;
+    bit<2> optClass;
+    bit<5> option;
+    bit<8> optionLength;
+}
+
+header telemetry_t{
+    bit<32> ipv4_srcAddr;
+    bit<32> ipv4_dstAddr;
+    bit<16> tcp_sport;
+    bit<16> tcp_dport;
+    bit<8>  protocol;
+    bit<48> ingress_timestamp;
+    bit<48> egress_timestamp; 
+    bit<19> enqQdepth;
+    bit<19> deqQdepth; // total 238 bits of telemetry data
+    bit<18> padding; 	// to make size a multiple of 32-bit word
+} 
+
+header tcp_t {
+    bit<16> srcPort;
+    bit<16> dstPort;
+    bit<32> seqNo;
+    bit<32> ackNo;
+    bit<4>  dataOffset;
+    bit<3>  res;
+    bit<3>  ecn;
+    bit<6>  ctrl;
+    bit<16> window;
+    bit<16> checksum;
+    bit<16> urgentPtr;
+}
 struct metadata {
-    /* empty */
+    bit<1> flag;
+    bit<7> index;
 }
 
 struct headers {
-    ethernet_t   ethernet;
-    ipv4_t       ipv4;
+    ethernet_t    ethernet;
+    ipv4_t        ipv4;
+    ipv4_option_t ipv4_option;	
+    telemetry_t   telemetry;
+    tcp_t 	  tcp; 	
 }
 
 /*************************************************************************
@@ -64,10 +104,17 @@ parser MyParser(packet_in packet,
 		default: accept;
 	}
     } 
-    state parse_ipv4{
-	packet.extract(hdr.ipv4);
+    state parse_ipv4 {
+        packet.extract(hdr.ipv4);
+        transition select(hdr.ipv4.protocol) {
+            6: parse_tcp;
+            default: accept;
+        }
+    }    
+    state parse_tcp {
+        packet.extract(hdr.tcp);
         transition accept;
-    }
+    }	
 }
 
 
@@ -127,9 +174,26 @@ control MyEgress(inout headers hdr,
                  inout metadata meta,
                  inout standard_metadata_t standard_metadata) {
 	
+	register<bit<19>>(1) bytesRemaining;
+	bit<19> bytes;
+	register<bit<32>>(1) index;
+	bit<32> id;
+	register<bit<SIZE_OF_ENTRY>>(MAX_ENTRIES) ring_buffer; 
+	bit<SIZE_OF_ENTRY> data;
 	action do_clone_e2e(){
-		clone3(CloneType.E2E,E2E_CLONE_SESSION_ID,standard_metadata);
+		clone(CloneType.E2E,E2E_CLONE_SESSION_ID);
 	}	
+	action mark_packet(){
+		meta.flag = 1;
+		data = hdr.ipv4.srcAddr ++ hdr.ipv4.dstAddr ++ hdr.tcp.srcPort ++ hdr.tcp.dstPort ++ hdr.ipv4.protocol ++ standard_metadata.enq_qdepth ++ standard_metadata.deq_qdepth ++ standard_metadata.ingress_global_timestamp ++ standard_metadata.egress_global_timestamp;
+		ring_buffer.write(id, data);
+		meta.index = (bit<7>)id;
+		id = id+1;
+		if(id==MAX_ENTRIES){
+			id=0;
+		}
+		index.write(0, id);
+	}
 	table generate_clone{
 		actions = {
 			do_clone_e2e;
@@ -139,7 +203,36 @@ control MyEgress(inout headers hdr,
 	}
 	apply {
 		if(!IS_E2E_CLONE(standard_metadata)){
-			generate_clone.apply();
+			if(standard_metadata.deq_qdepth > THRESHOLD){
+				bytes = standard_metadata.deq_qdepth - (bit<19>)standard_metadata.packet_length;
+				mark_packet();
+			}		
+			else{
+				bytes = bytes - (bit<19>)standard_metadata.packet_length;
+				mark_packet();
+			}
+			bytesRemaining.write(0, bytes);				
+			if(meta.flag == 1){
+				generate_clone.apply();			
+			}	
+		}
+		else{
+			    ring_buffer.read(data, (bit<32>)meta.index);
+			    hdr.ipv4_option.setValid();	
+			    hdr.ipv4.ihl = hdr.ipv4.ihl + 8;
+			    hdr.ipv4_option.optionLength = hdr.ipv4_option.optionLength + 32; 
+			    hdr.ipv4_option.option = TYPE_TELEMETRY;
+			    hdr.ipv4.totalLen = hdr.ipv4.totalLen + 32;	
+			    hdr.telemetry.setValid();
+			    hdr.telemetry.ipv4_srcAddr = data[237:206];
+			    hdr.telemetry.ipv4_dstAddr = data[205:174];
+			    hdr.telemetry.tcp_sport = data[173:158];
+			    hdr.telemetry.tcp_dport = data[157:142];
+			    hdr.telemetry.protocol = data[141: 134];
+			    hdr.telemetry.ingress_timestamp = data[133:86];
+			    hdr.telemetry.egress_timestamp = data[85:38]; 
+			    hdr.telemetry.enqQdepth = data[37:19];
+			    hdr.telemetry.deqQdepth = data[18:0];			
 		}
 	}
 }
@@ -177,7 +270,10 @@ control MyDeparser(packet_out packet, in headers hdr) {
     apply {
         /* TODO: add deparser logic */
 	packet.emit(hdr.ethernet); 
-	packet.emit(hdr.ipv4); 
+	packet.emit(hdr.ipv4);
+	packet.emit(hdr.ipv4_option);
+	packet.emit(hdr.telemetry); 
+	packet.emit(hdr.tcp);
     }
 }
 
