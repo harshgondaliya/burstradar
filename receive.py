@@ -4,7 +4,7 @@ import struct
 import os
 from scapy.all import sniff, sendp, hexdump, get_if_list, get_if_hwaddr
 from scapy.all import Packet, IPOption
-from scapy.fields import ShortField, IntField, LongField, BitField, FieldListField, FieldLenField, SourceIPField
+from scapy.fields import ShortField, IntField, LongField, BitField, FieldListField, FieldLenField, SourceIPField, Emph, ShortEnumField, ByteEnumField
 from scapy.all import IP, TCP, UDP, Raw
 from scapy.layers.inet import _IPOption_HDR, DestIPField
 from scapy.data import IP_PROTOS, TCP_SERVICES

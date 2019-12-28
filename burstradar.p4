@@ -1,4 +1,4 @@
-burb/* -*- P4_16 -*- */
+/* -*- P4_16 -*- */
 #include <core.p4>
 #include <v1model.p4>
 
@@ -189,7 +189,7 @@ control MyEgress(inout headers hdr,
 		data = hdr.ipv4.srcAddr ++ hdr.ipv4.dstAddr ++ hdr.tcp.srcPort ++ hdr.tcp.dstPort ++ hdr.ipv4.protocol ++ standard_metadata.enq_qdepth ++ standard_metadata.deq_qdepth ++ standard_metadata.ingress_global_timestamp ++ standard_metadata.egress_global_timestamp;
 		ring_buffer.write(id, data);
 		meta.index = (bit<7>)id;
-		id = id+1;
+		id = id + 1;
 		if(id==MAX_ENTRIES){
 			id=0;
 		}
@@ -235,7 +235,7 @@ control MyEgress(inout headers hdr,
 			    hdr.telemetry.ingress_timestamp = data[133:86];
 			    hdr.telemetry.egress_timestamp = data[85:38]; 
 			    hdr.telemetry.enqQdepth = data[37:19];
-			    hdr.telemetry.deqQdepth = data[18:0];			
+			    hdr.telemetry.deqQdepth = data[18:0];	 					
 		}
 	}
 }
@@ -275,7 +275,7 @@ control MyDeparser(packet_out packet, in headers hdr) {
 	packet.emit(hdr.ethernet); 
 	packet.emit(hdr.ipv4);
 	packet.emit(hdr.ipv4_option);
-	packet.emit(hdr.telemetry); 
+	packet.emit(hdr.telemetry);
 	packet.emit(hdr.tcp);
     }
 }
