@@ -2,13 +2,12 @@
 import sys
 import struct
 import os
-
 from scapy.all import sniff, sendp, hexdump, get_if_list, get_if_hwaddr
 from scapy.all import Packet, IPOption
-from scapy.all import ShortField, IntField, LongField, BitField, FieldListField, FieldLenField
+from scapy.fields import ShortField, IntField, LongField, BitField, FieldListField, FieldLenField, SourceIPField
 from scapy.all import IP, TCP, UDP, Raw
-from scapy.layers.inet import _IPOption_HDR
-
+from scapy.layers.inet import _IPOption_HDR, DestIPField
+from scapy.data import IP_PROTOS, TCP_SERVICES
 def get_if():
     ifs=get_if_list()
     iface=None
@@ -21,18 +20,20 @@ def get_if():
         exit(1)
     return iface
 
-class IPOption_MRI(IPOption):
-    name = "MRI"
+class IPOption_TELEMETRY(IPOption):
+    name = "TELEMETRY"
     option = 31
-    fields_desc = [ _IPOption_HDR,
-                    FieldLenField("length", None, fmt="B",
-                                  length_of="swids",
-                                  adjust=lambda pkt,l:l+4),
-                    ShortField("count", 0),
-                    FieldListField("swids",
-                                   [],
-                                   IntField("", 0),
-                                   length_from=lambda pkt:pkt.count*4) ]
+    fields_desc = [ _IPOption_HDR,			
+                    	Emph(SourceIPField("src", "dst")),
+                   	Emph(DestIPField("dst", "127.0.0.1")),
+			ShortEnumField("sport", 20, TCP_SERVICES),
+			ShortEnumField("dport", 80, TCP_SERVICES),
+			ByteEnumField("proto", 0, IP_PROTOS),
+			BitField("ingress_timestamp", 0, 48),
+			BitField("egress_timestamp", 0, 48),
+			BitField("enqQdepth", 0, 19),
+			BitField("deqQdepth", 0, 19),
+			BitField("padding", 0, 18) ]
 def handle_pkt(pkt):
     if TCP in pkt and pkt[TCP].dport == 1234:
         print "got a packet"

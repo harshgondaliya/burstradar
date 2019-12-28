@@ -1,4 +1,4 @@
-/* -*- P4_16 -*- */
+burb/* -*- P4_16 -*- */
 #include <core.p4>
 #include <v1model.p4>
 
@@ -180,6 +180,7 @@ control MyEgress(inout headers hdr,
 	bit<32> id;
 	register<bit<SIZE_OF_ENTRY>>(MAX_ENTRIES) ring_buffer; 
 	bit<SIZE_OF_ENTRY> data;
+	
 	action do_clone_e2e(){
 		clone(CloneType.E2E,E2E_CLONE_SESSION_ID);
 	}	
@@ -202,6 +203,8 @@ control MyEgress(inout headers hdr,
 		default_action = NoAction();
 	}
 	apply {
+		index.read(id, 0);
+		bytesRemaining.read(bytes, 0);			
 		if(!IS_E2E_CLONE(standard_metadata)){
 			if(standard_metadata.deq_qdepth > THRESHOLD){
 				bytes = standard_metadata.deq_qdepth - (bit<19>)standard_metadata.packet_length;
