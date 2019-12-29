@@ -33,7 +33,7 @@ class IPOption_TELEMETRY(IPOption):
 			BitField("egress_timestamp", 0, 48),
 			BitField("enqQdepth", 0, 19),
 			BitField("deqQdepth", 0, 19),
-			BitField("padding", 0, 18) ]
+			BitField("padding", 0, 2) ]
 def handle_pkt(pkt):
     if TCP in pkt and pkt[TCP].dport == 1234:
         print "got a packet"

@@ -56,7 +56,7 @@ header telemetry_t{
     bit<48> egress_timestamp; 
     bit<19> enqQdepth;
     bit<19> deqQdepth; // total 238 bits of telemetry data
-    bit<18> padding; 	// to make size a multiple of 32-bit word
+    bit<2> padding;	// 238 + 16 (IP options header)+ 2 = 256 (multiple of 32 bit)
 } 
 
 header tcp_t {
@@ -223,7 +223,7 @@ control MyEgress(inout headers hdr,
 			    ring_buffer.read(data, (bit<32>)meta.index);
 			    hdr.ipv4_option.setValid();	
 			    hdr.ipv4.ihl = hdr.ipv4.ihl + 8;
-			    hdr.ipv4_option.optionLength = hdr.ipv4_option.optionLength + 32; 
+			    hdr.ipv4_option.optionLength = 32; // 240 + 16 = 256 ==> 256/8 = 32 octets 
 			    hdr.ipv4_option.option = TYPE_TELEMETRY;
 			    hdr.ipv4.totalLen = hdr.ipv4.totalLen + 32;	
 			    hdr.telemetry.setValid();
@@ -246,6 +246,7 @@ control MyEgress(inout headers hdr,
 
 control MyComputeChecksum(inout headers hdr, inout metadata meta) {
      apply {
+
 	update_checksum(
 	    hdr.ipv4.isValid(),
             { hdr.ipv4.version,
@@ -259,6 +260,30 @@ control MyComputeChecksum(inout headers hdr, inout metadata meta) {
               hdr.ipv4.protocol,
               hdr.ipv4.srcAddr,
               hdr.ipv4.dstAddr },
+            hdr.ipv4.hdrChecksum,
+            HashAlgorithm.csum16);
+
+	update_checksum(
+	    hdr.ipv4_option.isValid(),
+            { hdr.ipv4_option.copyFlag,
+	      hdr.ipv4_option.optClass,
+              hdr.ipv4_option.option,
+              hdr.ipv4_option.optionLength},
+            hdr.ipv4.hdrChecksum,
+            HashAlgorithm.csum16);
+
+	update_checksum(
+	    hdr.telemetry.isValid(),
+            { hdr.telemetry.ipv4_srcAddr,
+	      hdr.telemetry.ipv4_dstAddr,
+              hdr.telemetry.tcp_sport,
+              hdr.telemetry.tcp_dport,
+              hdr.telemetry.protocol,
+              hdr.telemetry.ingress_timestamp,
+              hdr.telemetry.egress_timestamp,
+              hdr.telemetry.enqQdepth,
+              hdr.telemetry.deqQdepth,
+              hdr.telemetry.padding},
             hdr.ipv4.hdrChecksum,
             HashAlgorithm.csum16);
     }
