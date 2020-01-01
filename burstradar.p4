@@ -7,7 +7,7 @@ const bit<32> TYPE_EGRESS_CLONE = 2;
 #define IS_E2E_CLONE(std_meta) (std_meta.instance_type == TYPE_EGRESS_CLONE)
 const bit<32> E2E_CLONE_SESSION_ID = 11;
 const bit<32> MAX_ENTRIES = 26;
-#define THRESHOLD 1500
+#define THRESHOLD 6000
 #define SIZE_OF_ENTRY 238
 #define TYPE_TELEMETRY 31
 /*************************************************************************
@@ -252,8 +252,8 @@ control MyEgress(inout headers hdr,
 			    hdr.telemetry.protocol[7:0] = data_clone[141: 134];
 			    hdr.telemetry.ingress_timestamp[47:0] = data_clone[133:86];
 			    hdr.telemetry.egress_timestamp[47:0] = data_clone[85:38]; 
-			    hdr.telemetry.enqQdepth[18:0] = (data_clone[37:19] * 19w1500);
-			    hdr.telemetry.deqQdepth[18:0] = (data_clone[18:0] * 19w1500);
+			    hdr.telemetry.enqQdepth[18:0] = data_clone[37:19];
+			    hdr.telemetry.deqQdepth[18:0] = data_clone[18:0];
 			    hdr.telemetry.padding = (bit<2>)0; 					
 			    truncate(86); // Ether(14) + IP (20) + IP Option (32) + TCP (20) = 86 bytes
 		}		
