@@ -4,7 +4,7 @@ import struct
 import os
 from scapy.all import sniff, sendp, hexdump, get_if_list, get_if_hwaddr
 from scapy.all import Packet, IPOption
-from scapy.fields import ShortField, IntField, LongField, BitField, FieldListField, FieldLenField, SourceIPField, Emph, ShortEnumField, ByteEnumField
+from scapy.fields import ShortField, IntField, LongField, BitField, FieldListField, FieldLenField, SourceIPField, Emph, ShortEnumField, ByteEnumField, ByteField
 from scapy.all import IP, TCP, UDP, Raw
 from scapy.layers.inet import _IPOption_HDR, DestIPField
 from scapy.data import IP_PROTOS, TCP_SERVICES
@@ -23,8 +23,9 @@ def get_if():
 class IPOption_TELEMETRY(IPOption):
     name = "TELEMETRY"
     option = 31
-    fields_desc = [ _IPOption_HDR,			
-                    	Emph(SourceIPField("src", "dst")),
+    fields_desc = [ _IPOption_HDR,
+			ByteField("length", 2),
+			Emph(SourceIPField("src", "dst")),
                    	Emph(DestIPField("dst", "127.0.0.1")),
 			ShortEnumField("sport", 20, TCP_SERVICES),
 			ShortEnumField("dport", 80, TCP_SERVICES),
@@ -34,6 +35,7 @@ class IPOption_TELEMETRY(IPOption):
 			BitField("enqQdepth", 0, 19),
 			BitField("deqQdepth", 0, 19),
 			BitField("padding", 0, 2) ]
+
 def handle_pkt(pkt):
     if TCP in pkt and pkt[TCP].dport == 1234:
         print "got a packet"

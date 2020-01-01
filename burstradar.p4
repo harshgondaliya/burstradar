@@ -6,8 +6,8 @@ const bit<16> TYPE_IPV4 = 0x800;
 const bit<32> TYPE_EGRESS_CLONE = 2;
 #define IS_E2E_CLONE(std_meta) (std_meta.instance_type == TYPE_EGRESS_CLONE)
 const bit<32> E2E_CLONE_SESSION_ID = 11;
-const bit<19> THRESHOLD = 18750;
-const bit<32> MAX_ENTRIES = 29;
+const bit<32> MAX_ENTRIES = 26;
+#define THRESHOLD 1500
 #define SIZE_OF_ENTRY 238
 #define TYPE_TELEMETRY 31
 /*************************************************************************
@@ -55,8 +55,8 @@ header telemetry_t{
     bit<48> ingress_timestamp;
     bit<48> egress_timestamp; 
     bit<19> enqQdepth;
-    bit<19> deqQdepth; // total 238 bits of telemetry data
-    bit<2> padding;	// 238 + 16 (IP options header)+ 2 = 256 (multiple of 32 bit)
+    bit<19> deqQdepth; 
+    bit<2> padding; // 238 bits of telemetry data + 2 bits of padding + 16 bits of IPOption header = 256 bits (multiple of 32)
 } 
 
 header tcp_t {
@@ -73,7 +73,7 @@ header tcp_t {
     bit<16> urgentPtr;
 }
 struct metadata {
-    bit<1> flag;
+    bit<1> flag; // metadata for each packet
     bit<7> index;
 }
 
@@ -174,24 +174,34 @@ control MyEgress(inout headers hdr,
                  inout metadata meta,
                  inout standard_metadata_t standard_metadata) {
 	
-	register<bit<19>>(1) bytesRemaining;
-	bit<19> bytes;
-	register<bit<32>>(1) index;
-	bit<32> id;
+	/* 
+		State needs to be maintained for bytesRemaining, index, ring_buffer for data packets. Thus, they are implemented using
+		registers.
+	*/
+	register<bit<19>>(1) bytesRemaining; // bytes count stored in a register
+	bit<19> bytes; // temporary bytes count in bit<> format
+	int<19> bytes_int; // temporary bytes count in int<> format
+	int<19> deqQdepth;
+	register<bit<32>>(1) index; // index stored in a register
+	bit<32> id; // temporary index in bit<> format
 	register<bit<SIZE_OF_ENTRY>>(MAX_ENTRIES) ring_buffer; 
-	bit<SIZE_OF_ENTRY> data;
+	bit<SIZE_OF_ENTRY> data; // to move data to register 
+	bit<SIZE_OF_ENTRY> data_clone; // to extract data from register and transfer it to cloned packet
 	
 	action do_clone_e2e(){
-		clone(CloneType.E2E,E2E_CLONE_SESSION_ID);
+		clone3(CloneType.E2E,E2E_CLONE_SESSION_ID,meta);
 	}	
 	action mark_packet(){
 		meta.flag = 1;
-		data = hdr.ipv4.srcAddr ++ hdr.ipv4.dstAddr ++ hdr.tcp.srcPort ++ hdr.tcp.dstPort ++ hdr.ipv4.protocol ++ standard_metadata.enq_qdepth ++ standard_metadata.deq_qdepth ++ standard_metadata.ingress_global_timestamp ++ standard_metadata.egress_global_timestamp;
+		data = hdr.ipv4.srcAddr ++ hdr.ipv4.dstAddr ++ hdr.tcp.srcPort ++ hdr.tcp.dstPort ++
+			  hdr.ipv4.protocol ++ standard_metadata.ingress_global_timestamp ++
+				standard_metadata.egress_global_timestamp ++ standard_metadata.enq_qdepth ++  
+                                   standard_metadata.deq_qdepth; // concatenate all required fields into one bitstring	
 		ring_buffer.write(id, data);
 		meta.index = (bit<7>)id;
 		id = id + 1;
 		if(id==MAX_ENTRIES){
-			id=0;
+			id=0;     
 		}
 		index.write(0, id);
 	}
@@ -202,41 +212,51 @@ control MyEgress(inout headers hdr,
 		}
 		default_action = NoAction();
 	}
-	apply {
+	apply {  // index and bytesRemaining register values are initialized to 0 from the control plane (simple_switch_CLI)
 		index.read(id, 0);
-		bytesRemaining.read(bytes, 0);			
+		bytesRemaining.read(bytes, 0);	
+		bytes_int = (int<19>)bytes;
 		if(!IS_E2E_CLONE(standard_metadata)){
-			if(standard_metadata.deq_qdepth > THRESHOLD){
-				bytes = standard_metadata.deq_qdepth - (bit<19>)standard_metadata.packet_length;
+			deqQdepth = (int<19>)(standard_metadata.deq_qdepth * 19w1500);	
+			if(deqQdepth > THRESHOLD){
+				bytes_int = (deqQdepth - (int<19>)(bit<19>)standard_metadata.packet_length);
 				mark_packet();
 			}		
 			else{
-				bytes = bytes - (bit<19>)standard_metadata.packet_length;
-				mark_packet();
+				if(bytes_int > 0){
+				    bytes_int = bytes_int - (int<19>)(bit<19>)standard_metadata.packet_length;
+				    mark_packet();
+				}
 			}
+			if(bytes_int < 0){
+				bytes_int = 0;
+			}
+			bytes = (bit<19>)bytes_int;
 			bytesRemaining.write(0, bytes);				
 			if(meta.flag == 1){
 				generate_clone.apply();			
 			}	
 		}
 		else{
-			    ring_buffer.read(data, (bit<32>)meta.index);
-			    hdr.ipv4_option.setValid();	
-			    hdr.ipv4.ihl = hdr.ipv4.ihl + 8;
-			    hdr.ipv4_option.optionLength = 32; // 240 + 16 = 256 ==> 256/8 = 32 octets 
-			    hdr.ipv4_option.option = TYPE_TELEMETRY;
+			    ring_buffer.read(data_clone, (bit<32>)meta.index);
+			    hdr.ipv4.ihl = hdr.ipv4.ihl + 8; // 32 bit word * 8 = 256 bits
 			    hdr.ipv4.totalLen = hdr.ipv4.totalLen + 32;	
-			    hdr.telemetry.setValid();
-			    hdr.telemetry.ipv4_srcAddr = data[237:206];
-			    hdr.telemetry.ipv4_dstAddr = data[205:174];
-			    hdr.telemetry.tcp_sport = data[173:158];
-			    hdr.telemetry.tcp_dport = data[157:142];
-			    hdr.telemetry.protocol = data[141: 134];
-			    hdr.telemetry.ingress_timestamp = data[133:86];
-			    hdr.telemetry.egress_timestamp = data[85:38]; 
-			    hdr.telemetry.enqQdepth = data[37:19];
-			    hdr.telemetry.deqQdepth = data[18:0];	 					
-		}
+			    hdr.ipv4_option.setValid();	// add IPOption header
+			    hdr.ipv4_option.optionLength = 32; // telemetry(240) + IPOption(16) = 256 bytes ==> 256/8 = 32 octets 
+			    hdr.ipv4_option.option = TYPE_TELEMETRY;
+			    hdr.telemetry.setValid(); // add telemetry header
+			    hdr.telemetry.ipv4_srcAddr[31:0] = data_clone[237:206];// extract in the same sequence in which it was concatenated
+			    hdr.telemetry.ipv4_dstAddr[31:0] = data_clone[205:174];
+			    hdr.telemetry.tcp_sport[15:0] = data_clone[173:158];
+			    hdr.telemetry.tcp_dport[15:0] = data_clone[157:142];
+			    hdr.telemetry.protocol[7:0] = data_clone[141: 134];
+			    hdr.telemetry.ingress_timestamp[47:0] = data_clone[133:86];
+			    hdr.telemetry.egress_timestamp[47:0] = data_clone[85:38]; 
+			    hdr.telemetry.enqQdepth[18:0] = (data_clone[37:19] * 19w1500);
+			    hdr.telemetry.deqQdepth[18:0] = (data_clone[18:0] * 19w1500);
+			    hdr.telemetry.padding = (bit<2>)0; 					
+			    truncate(86); // Ether(14) + IP (20) + IP Option (32) + TCP (20) = 86 bytes
+		}		
 	}
 }
 
@@ -266,7 +286,7 @@ control MyComputeChecksum(inout headers hdr, inout metadata meta) {
 	update_checksum(
 	    hdr.ipv4_option.isValid(),
             { hdr.ipv4_option.copyFlag,
-	      hdr.ipv4_option.optClass,
+	      hdr.ipv4_option.optClass,       // update checksum for IP Option header
               hdr.ipv4_option.option,
               hdr.ipv4_option.optionLength},
             hdr.ipv4.hdrChecksum,
@@ -278,7 +298,7 @@ control MyComputeChecksum(inout headers hdr, inout metadata meta) {
 	      hdr.telemetry.ipv4_dstAddr,
               hdr.telemetry.tcp_sport,
               hdr.telemetry.tcp_dport,
-              hdr.telemetry.protocol,
+              hdr.telemetry.protocol,           // update checksum for telemetry header
               hdr.telemetry.ingress_timestamp,
               hdr.telemetry.egress_timestamp,
               hdr.telemetry.enqQdepth,
