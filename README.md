@@ -31,7 +31,7 @@ BurstRadar detects a microburst in the dataplane, captures a snapshot of telemet
      ```
      vagrant@p4:~/scapy$ gedit ~/.bashrc
      ```
-     * Copy the following line to ```.bashrc``` file, save and exit. 
+     * Add the following line to ```.bashrc``` file, save and exit. 
        ```
        export PATH="/home/vagrant/scapy:$PATH" 
        ```
