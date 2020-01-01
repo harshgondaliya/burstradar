@@ -109,7 +109,8 @@ BurstRadar detects a microburst in the dataplane, captures a snapshot of telemet
      ```
      This ensures that about 10 Mbps burst traffic is sent from host 1 to host host 3.
    * A few packets that causes microburst will be marked and received at the monitoring server (```h4```). 
+   * Similarly, burst traffic can be sent concurrently to multiple egress ports and the BurstRadar system will give desired results.
 
 ## Result Screenshots
-
+![results](https://github.com/harshgondaliya/burstradar/blob/master/results-screenshot.PNG)
 
