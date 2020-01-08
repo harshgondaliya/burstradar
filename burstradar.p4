@@ -175,8 +175,8 @@ control MyEgress(inout headers hdr,
                  inout standard_metadata_t standard_metadata) {
 	
 	/* 
-		State needs to be maintained for bytesRemaining, index, ring_buffer for data packets. Thus, they are implemented using
-		registers.
+	Values of bytesRemaining, index, ring_buffer variables need to be maintained between
+	all incoming data packets. Thus, these variables are implemented using registers.
 	*/
 	register<bit<19>>(1) bytesRemaining; // bytes count stored in a register
 	bit<19> bytes; // temporary bytes count in bit<> format
