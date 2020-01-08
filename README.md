@@ -9,7 +9,7 @@ BurstRadar detects a microburst in the dataplane, captures a snapshot of telemet
 ## Steps to test BurstRadar system
 ### A. Environment Setup
 1. Install [Oracle VirtualBox](https://www.virtualbox.org/).
-2. Download the VM Image [(P4 Tutorial 2019-08-15)](http://stanford.edu/~sibanez/docs/).
+2. Download the VM Image [(P4 Tutorial 2019-08-15)](https://drive.google.com/open?id=1mfk-BiLQP3YHcOznaHoeio1fWHSNBnKw).
 3. Import _P4 Tutorial 2019-08-15.ova_ appliance in VirtualBox.
 4. Start the VM in VirtualBox and execute the following: 
    * Change to ```/home/vagrant``` directory.
