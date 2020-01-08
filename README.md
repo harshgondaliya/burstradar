@@ -1,5 +1,5 @@
 # BurstRadar
-This repository contains implementation of BurstRadar system using P4 V1 Model Architecture. BurstRadar system is presented in the paper: [**BurstRadar: Practical Real-time Microburst Monitoring for Datacenter Networks**](https://drive.google.com/open?id=1gCPpqhtfsiABZm1_1sMKfB4tm6t1Vhxs) by Raj Joshi et. al.,  published in the Proceedings of the ACM 9th Asia-Pacific Workshop on Systems (APSys’18). 
+This repository contains implementation of BurstRadar system using P4 _V1Model Architecture_ on _simple_switch target_. BurstRadar system is presented in the paper: [**BurstRadar: Practical Real-time Microburst Monitoring for Datacenter Networks**](https://drive.google.com/open?id=1gCPpqhtfsiABZm1_1sMKfB4tm6t1Vhxs) by Raj Joshi et. al.,  published in the Proceedings of the ACM 9th Asia-Pacific Workshop on Systems (APSys’18). 
 
 BurstRadar detects a microburst in the dataplane, captures a snapshot of telemetry information of all the involved packets, and further exports this telemetry information to a monitoring server in an out-of-band manner. A detailed explanation and background of BurstRadar system is provided in the aforementioned paper.
 <p align="center">
