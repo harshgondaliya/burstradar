@@ -105,12 +105,12 @@ BurstRadar detects a microburst in the dataplane, captures a snapshot of telemet
      ```
      iperf -c 10.0.3.3 -w 2m -t 35
      ```
-     This ensures that about 4-4.5 Mbps background traffic is running between host 2 and host 3.
+     This ensures that approx. 4-4.5 Mbps background traffic is running between host 2 and host 3.
    * In ```h1```'s xterm display, execute:
      ```
      ./send.py 10.0.3.3 6700 300
      ```
-     This ensures that about 10 Mbps burst traffic is sent from host 1 to host host 3.
+     This ensures that approx. 10 Mbps burst traffic is sent from host 1 to host host 3.
    * A few packets that causes microburst will be marked and received at the monitoring server (```h4```). 
    * Similarly, burst traffic can be sent concurrently to multiple egress ports and the BurstRadar system will give desired results.
 
